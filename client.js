@@ -67,8 +67,9 @@ window.__ModuleLoader__.load({
       'menu.copyLink': '复制链接',
       'menu.openInternal': '打开（内部）',
       'menu.openDefault': '打开（默认应用）',
+      'menu.openFolder': '打开文件夹',
       'menu.chooseApp': '选择应用打开…',
-      'menu.reveal': '打开文件夹',
+      'menu.reveal': '在所在位置显示',
       'menu.saveAs': '另存为…',
       'menu.openLink': '打开（默认浏览器）',
       'menu.chooseBrowser': '选择浏览器打开…',
@@ -97,6 +98,7 @@ window.__ModuleLoader__.load({
       'menu.copyLink': 'Copy link',
       'menu.openInternal': 'Open inside DSH',
       'menu.openDefault': 'Open with default app',
+      'menu.openFolder': 'Open folder',
       'menu.chooseApp': 'Open with…',
       'menu.reveal': 'Show in folder',
       'menu.saveAs': 'Save as…',
@@ -362,7 +364,25 @@ window.__ModuleLoader__.load({
       return null;
     }
 
+    function findSidebarCandidate(target, store) {
+      if (!(target instanceof Element)) return null;
+      const entry = target.closest('[data-files-entry]');
+      if (!entry) return null;
+      if (entry.getAttribute('data-files-entry') !== 'directory') return null;
+      const path = entry.getAttribute('data-files-path');
+      if (typeof path !== 'string' || path.length === 0) return null;
+      return {
+        element: entry,
+        mode: 'directory',
+        sessionId: store.getSnapshot().currentSessionId,
+        path,
+        address: null,
+        absolutePath: isAbsolutePath(path) ? path : null,
+      };
+    }
+
     // ---------------------------------------------------------------- state
+
 
     function createMenuStore() {
       let state = {
@@ -864,9 +884,11 @@ window.__ModuleLoader__.load({
         }
         if (state.canOpen !== false) {
           items.push(separator('separator-apps'));
-          items.push(makeItem('open', t('menu.openDefault')));
-          if (isFile) items.push(makeItem('apps-choose', t('menu.chooseApp')));
-          items.push(makeItem('reveal', t('menu.reveal')));
+          items.push(makeItem('open', isFile ? t('menu.openDefault') : t('menu.openFolder')));
+          if (isFile) {
+            items.push(makeItem('apps-choose', t('menu.chooseApp')));
+            items.push(makeItem('reveal', t('menu.reveal')));
+          }
         }
         if (isFile) {
           items.push(separator('separator-save'));
@@ -933,10 +955,11 @@ window.__ModuleLoader__.load({
           const onContextMenu = (event) => {
             const target = event.target;
             const flow = target instanceof Element ? target.closest('[data-chat-flow]') : null;
-            if (!flow) return;
-            const file = findCandidate(target, flow, store) || findTextCandidate(target, flow, store);
+            const file = flow
+              ? findCandidate(target, flow, store) || findTextCandidate(target, flow, store)
+              : findSidebarCandidate(target, store);
             if (!file) {
-              report('miss', describeTarget(target));
+              if (flow) report('miss', describeTarget(target));
               return;
             }
             report('hit', { mode: file.mode, path: file.path });
