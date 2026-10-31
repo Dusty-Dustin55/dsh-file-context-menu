@@ -176,6 +176,15 @@ function normalizeUrl(raw) {
   return parsed.href;
 }
 
+function openWithDialog(target) {
+  const child = spawn('rundll32.exe', ['shell32.dll,OpenAs_RunDLL', target], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: false,
+  });
+  child.unref();
+}
+
 function registerRoute(hostCtx, path, handler, label) {
   hostCtx.effect(
     () => hostCtx.webServer.register({ kind: 'exact', path, handler }),
@@ -237,6 +246,61 @@ export function apply(ctx) {
         });
       },
       'file-actions: open-url route',
+    );
+
+    registerRoute(
+      hostCtx,
+      `${ROUTE_PREFIX}/open-with`,
+      (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' });
+          response.end();
+          return;
+        }
+        if (request.headers['x-file-actions'] !== '1') {
+          sendJson(response, 403, { ok: false, error: 'forbidden' });
+          return;
+        }
+        readBody(request).then((body) => {
+          if (body === null) {
+            sendJson(response, 413, { ok: false });
+            return;
+          }
+          let payload;
+          try {
+            payload = JSON.parse(body);
+          } catch {
+            sendJson(response, 400, { ok: false });
+            return;
+          }
+          const target = payload && payload.path;
+          if (typeof target !== 'string' || target.length === 0 || target.length > 4096 || !isAbsolute(target)) {
+            sendJson(response, 400, { ok: false, error: 'invalid-path' });
+            return;
+          }
+          try {
+            const info = statSync(target);
+            if (!info.isFile() && !info.isDirectory()) {
+              sendJson(response, 400, { ok: false, error: 'not-a-file' });
+              return;
+            }
+          } catch {
+            sendJson(response, 404, { ok: false, error: 'not-found' });
+            return;
+          }
+          if (process.platform !== 'win32') {
+            sendJson(response, 501, { ok: false, error: 'unsupported' });
+            return;
+          }
+          try {
+            openWithDialog(target);
+            sendJson(response, 200, { ok: true });
+          } catch (error) {
+            sendJson(response, 500, { ok: false, error: String(error && error.message) });
+          }
+        });
+      },
+      'file-actions: open-with route',
     );
 
     registerRoute(

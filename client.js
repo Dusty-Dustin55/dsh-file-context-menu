@@ -88,6 +88,7 @@ window.__ModuleLoader__.load({
       'error.url': '无法打开链接',
       'error.browsers': '无法获取浏览器列表',
       'error.apps': '无法获取应用列表',
+      'error.openWith': '无法打开系统应用选择框',
     };
     const en = {
       'menu.quoteFile': 'Reference this file',
@@ -117,6 +118,7 @@ window.__ModuleLoader__.load({
       'error.url': 'Could not open the link',
       'error.browsers': 'Could not list browsers',
       'error.apps': 'Could not list applications',
+      'error.openWith': 'Could not open the system app chooser',
     };
 
     // ---------------------------------------------------------------- paths
@@ -655,6 +657,26 @@ window.__ModuleLoader__.load({
       if (!result || result.ok !== true) throw new Error('open');
     }
 
+    function isWindowsPlatform() {
+      try {
+        return /^Win/i.test(navigator.platform || '') || /Windows/u.test(navigator.userAgent || '');
+      } catch {
+        return false;
+      }
+    }
+
+    async function openWithSystem(file, ctx) {
+      const absolutePath = await resolveAbsolute(file, ctx);
+      const response = await fetch(apiPath('file-actions/open-with'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-file-actions': '1' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ path: absolutePath }),
+      });
+      if (response.status === 501) throw new Error('unsupported');
+      if (!response.ok) throw new Error('openWith');
+    }
+
     async function fetchPathKind(absolutePath) {
       const response = await fetch(apiPath('file-actions/kind'), {
         method: 'POST',
@@ -933,22 +955,45 @@ window.__ModuleLoader__.load({
             store.patch({ view: 'main', options: null, viewError: null, error: null });
             return;
           }
-          if (action === 'url-choose' || action === 'apps-choose') {
-            store.patch({
-              view: action === 'url-choose' ? 'browsers' : 'apps',
-              options: null,
-              viewError: null,
-              error: null,
-            });
+          if (action === 'url-choose') {
+            store.patch({ view: 'browsers', options: null, viewError: null, error: null });
             try {
-              const options = action === 'url-choose' ? await fetchBrowsers() : await listApplications(file, ctx);
-              if (options.length === 0) {
-                store.patch({ viewError: action === 'url-choose' ? t('error.browsers') : t('error.apps') });
+              const browsers = await fetchBrowsers();
+              if (browsers.length === 0) {
+                store.patch({ viewError: t('error.browsers') });
               } else {
-                store.patch({ options });
+                store.patch({ options: browsers });
               }
             } catch {
-              store.patch({ viewError: action === 'url-choose' ? t('error.browsers') : t('error.apps') });
+              store.patch({ viewError: t('error.browsers') });
+            }
+            return;
+          }
+          if (action === 'apps-choose') {
+            if (isWindowsPlatform()) {
+              store.patch({ busy: action, error: null });
+              try {
+                await openWithSystem(file, ctx);
+                store.close();
+                return;
+              } catch (error) {
+                if (error && error.message !== 'unsupported') {
+                  store.patch({ busy: null, error: t('error.openWith') });
+                  return;
+                }
+                store.patch({ busy: null });
+              }
+            }
+            store.patch({ view: 'apps', options: null, viewError: null, error: null });
+            try {
+              const apps = await listApplications(file, ctx);
+              if (apps.length === 0) {
+                store.patch({ viewError: t('error.apps') });
+              } else {
+                store.patch({ options: apps });
+              }
+            } catch {
+              store.patch({ viewError: t('error.apps') });
             }
             return;
           }
@@ -998,7 +1043,9 @@ window.__ModuleLoader__.load({
                                 ? t('error.browsers')
                                 : key === 'apps'
                                   ? t('error.apps')
-                                  : t('error.generic');
+                                  : key === 'openWith'
+                                    ? t('error.openWith')
+                                    : t('error.generic');
               store.patch({ busy: null, error: text });
             }
           }
