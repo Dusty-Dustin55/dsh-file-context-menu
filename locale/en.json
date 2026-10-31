@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Right-click options",
+    "description": "Right-click a file reference in chat to preview it, open it with the default app, reveal it in the file manager, or save a copy."
+  }
+}
