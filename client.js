@@ -392,6 +392,54 @@ window.__ModuleLoader__.load({
       return null;
     }
 
+    function findPlainUrlCandidate(target, flow) {
+      if (!(target instanceof Element)) return null;
+      for (let element = target; element && element !== flow.parentElement; element = element.parentElement) {
+        if (element === flow) break;
+        if (element.childElementCount !== 0) continue;
+        const text = (element.textContent || '').trim();
+        if (text.length < 8 || text.length > 2048 || /\s/u.test(text) || !/^https?:\/\//iu.test(text)) continue;
+        const url = text.replace(/[.,;:!?]+$/u, '');
+        if (!/^https?:\/\/[^\s<>"']+$/iu.test(url)) continue;
+        let label;
+        try {
+          label = new URL(url).host;
+        } catch {
+          label = url;
+        }
+        return {
+          element,
+          mode: 'url',
+          url,
+          label,
+          sessionId: null,
+          path: null,
+          address: null,
+          absolutePath: null,
+        };
+      }
+      return null;
+    }
+
+    function findAttachmentCandidate(target, flow, store) {
+      if (!(target instanceof Element)) return null;
+      const card = target.closest('[data-message-attachments] [title]');
+      if (!card) return null;
+      if (typeof flow.contains === 'function' && !flow.contains(card)) return null;
+      const name = card.getAttribute('title');
+      if (typeof name !== 'string' || name.length === 0) return null;
+      if (classifyPathText(name) !== 'file') return null;
+      return {
+        element: card,
+        mode: 'attachment',
+        sessionId: store.getSnapshot().currentSessionId,
+        path: name,
+        label: name,
+        address: null,
+        absolutePath: null,
+      };
+    }
+
     function findSidebarCandidate(target, ctx, store) {
       if (!(target instanceof Element)) return null;
       const entry = target.closest('[data-files-entry]');
@@ -925,6 +973,8 @@ window.__ModuleLoader__.load({
         items.push(separator('separator-url'));
         items.push(makeItem('url-default', t('menu.openLink')));
         items.push(makeItem('url-choose', t('menu.chooseBrowser')));
+      } else if (file.mode === 'attachment') {
+        items.push(makeItem('copy-name', t('menu.copyName')));
       } else {
         const kind =
           file.mode === 'workspace'
@@ -1026,7 +1076,10 @@ window.__ModuleLoader__.load({
             const target = event.target;
             const flow = target instanceof Element ? target.closest('[data-chat-flow]') : null;
             const file = flow
-              ? findCandidate(target, flow, store) || findTextCandidate(target, flow, store)
+              ? findCandidate(target, flow, store) ||
+                findTextCandidate(target, flow, store) ||
+                findPlainUrlCandidate(target, flow) ||
+                findAttachmentCandidate(target, flow, store)
               : findSidebarCandidate(target, ctx, store);
             if (!file) {
               if (flow) report('miss', describeTarget(target));
