@@ -4,6 +4,12 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-file-context-menu)](https://www.npmjs.com/package/dsh-file-context-menu)
 
+## 截图
+
+| 文件菜单 | 工作区菜单 | 网页链接菜单 |
+|---|---|---|
+| ![文件右键菜单](https://raw.githubusercontent.com/Dusty-Dustin55/dsh-file-context-menu/main/screenshots/file-menu.png) | ![工作区右键菜单](https://raw.githubusercontent.com/Dusty-Dustin55/dsh-file-context-menu/main/screenshots/workspace-menu.png) | ![网页链接右键菜单](https://raw.githubusercontent.com/Dusty-Dustin55/dsh-file-context-menu/main/screenshots/link-menu.png) |
+
 ## 支持的右键位置
 
 | 位置 | 右键对象 | 菜单 |
