@@ -1,8 +1,23 @@
 # 右键选项 · DSH 文件右键菜单
 
-在 DeepSeek Harness（DSH）的对话区右键，弹出统一的操作菜单。菜单按目标类型分层：
+在 DeepSeek Harness（DSH）里右键文件、目录、网页链接和工作区，弹出统一的操作菜单。
 
-## 文件引用
+[![npm](https://img.shields.io/npm/v/dsh-file-context-menu)](https://www.npmjs.com/package/dsh-file-context-menu)
+
+## 支持的右键位置
+
+| 位置 | 右键对象 | 菜单 |
+|---|---|---|
+| 对话区 | 文件链接 / 交付卡片 / 行内代码路径 | 完整文件菜单 |
+| 对话区 | 目录路径（如 `证据库/全文/`） | 目录菜单 |
+| 对话区 | 无扩展名路径（如 `工作底稿/说明`） | 自动判断文件/目录 |
+| 对话区 | http(s) 网页链接 | 链接菜单 |
+| 右侧 Sidebar「文件」树 | 文件夹 | 文件夹菜单 |
+| 左侧工作区列表 | 工作区分组行 | 工作区菜单 |
+
+## 菜单
+
+### 文件
 
 | 菜单项 | 作用 |
 |---|---|
@@ -11,11 +26,19 @@
 | 复制路径 | 复制绝对路径（解析不到时退回显示路径） |
 | 打开（内部） | 在右侧 Sidebar 预览文件 |
 | 打开（默认应用） | 交给系统默认程序打开 |
-| 选择应用打开… | Windows 调用系统「打开方式」对话框；macOS 调用系统应用选择器；其他系统退回应用列表 |
+| 选择应用打开… | Windows 系统「打开方式」；macOS 系统应用选择器；其他系统退回应用列表 |
 | 打开所在文件夹 | 打开父文件夹并选中该文件 |
 | 另存为… | 复制一份到自选位置（`showSaveFilePicker`，不可用时回退下载） |
 
-## 网页链接
+### 目录 / 文件夹
+
+- 复制名称
+- 复制路径
+- 打开文件夹
+
+「打开文件夹」直接打开目录本身；「打开所在文件夹」是打开父目录并选中它。
+
+### 网页链接
 
 | 菜单项 | 作用 |
 |---|---|
@@ -26,29 +49,12 @@
 | 打开（默认浏览器） | 用系统默认浏览器打开 |
 | 选择浏览器打开… | 列出本机浏览器（Edge、Chrome、Firefox、Brave、Vivaldi） |
 
-## 目录 / 无扩展名路径
-
-- **目录**（以 `/` 或 `\` 结尾，如 `证据库/全文/`）：复制名称 / 复制路径 / 打开文件夹
-- **无扩展名路径**（如 `工作底稿/说明`）：先向宿主查询它是文件还是目录；
-  - 文件：显示完整文件菜单
-  - 目录：显示目录菜单
-  - 查询失败：只保留复制名称 / 复制路径 / 打开文件夹
-
-## Sidebar 文件树
-
-在右侧 Sidebar 的「文件」树里右键**文件夹**：
-
-- 复制名称
-- 复制路径
-- 打开文件夹（系统文件管理器）
-
-## 左侧工作区列表
-
-在左侧工作区列表里右键一个**工作区分组行**：
+### 左侧工作区
 
 - 复制名称（工作区标题）
 - 复制路径
-- 打开所在文件夹（在父目录中显示该工作区）
+- 打开工作区文件夹（打开工作区目录本身）
+- 打开所在文件夹（在父目录中定位工作区文件夹）
 
 ## 安装
 
@@ -60,13 +66,19 @@ dsh plugin --profile desktop add dsh-file-context-menu
 
 安装后**完全退出并重新启动 DSH**（客户端模块在启动时加载）。
 
-要求：DSH `0.2.1-rc.1` 及以上（`engines.dsh` 已声明）。
+更新：
+
+```powershell
+dsh plugin --profile desktop add dsh-file-context-menu@latest
+```
 
 卸载：
 
 ```powershell
 dsh plugin --profile desktop remove dsh-file-context-menu
 ```
+
+要求：DSH `0.2.1-rc.1` 及以上（`engines.dsh` 已声明）。当前适配 DSH 0.2.1-rc.5。
 
 ## 识别范围
 
@@ -76,6 +88,15 @@ dsh plugin --profile desktop remove dsh-file-context-menu
 - 带路径分隔符的目录与无扩展名路径
 
 不识别：普通正文里的路径、不带斜杠的裸目录名（写成 `工作底稿/` 即可）、代码表达式。
+
+## 工作原理
+
+- 客户端 `client.js` 捕获对话区、Sidebar 文件树和左侧工作区列表的 `contextmenu`
+- 路径解析复用 DSH 的 `remote.session`、`remote.workspaceFiles` 和 `workspaces` 服务
+- 宿主 `index.js` 提供四个本机路由：`/file-actions/browsers`、`/file-actions/open-url`、
+  `/file-actions/kind`、`/file-actions/open-with`
+- 文件引用通过 `conversation.input.shell(sessionId).addFiles()` 插入 `@路径`
+- 链接引用通过 `shell.requestDraftInitialization()` 插入 URL 文本
 
 ## 隐私
 
@@ -90,8 +111,14 @@ dsh plugin --profile desktop remove dsh-file-context-menu
 - 链接引用插入的是 URL 文本（输入框 `@` 引用只支持工作区文件）。
 - 「另存为」受 `/api/file` 的字节上限约束（当前约 10 MB）。
 - 相对路径无法解析出绝对路径时，只提供「打开（内部）」和「引用」。
+- Sidebar 文件树目前只接管文件夹行，文件行右键未接管。
 - 依赖 DSH 0.2.x 的客户端服务名（`remote.session`、`remote.workspaceFiles`、`sidebarRight`、
-  `shell.overlay`）；大版本升级后需复核。
+  `shell.overlay`、`workspaces`）；大版本升级后需复核。
+
+## 反馈与更新
+
+- 问题：https://github.com/Dusty-Dustin55/dsh-file-context-menu/issues
+- 更新记录：[CHANGELOG.md](CHANGELOG.md)
 
 ## License
 

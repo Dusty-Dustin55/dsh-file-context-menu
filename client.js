@@ -69,6 +69,7 @@ window.__ModuleLoader__.load({
       'menu.openInternal': '打开（内部）',
       'menu.openDefault': '打开（默认应用）',
       'menu.openFolder': '打开文件夹',
+      'menu.openWorkspaceFolder': '打开工作区文件夹',
       'menu.chooseApp': '选择应用打开…',
       'menu.reveal': '打开所在文件夹',
       'menu.saveAs': '另存为…',
@@ -101,6 +102,7 @@ window.__ModuleLoader__.load({
       'menu.openInternal': 'Open inside DSH',
       'menu.openDefault': 'Open with default app',
       'menu.openFolder': 'Open folder',
+      'menu.openWorkspaceFolder': 'Open workspace folder',
       'menu.chooseApp': 'Open with…',
       'menu.reveal': 'Open containing folder',
       'menu.saveAs': 'Save as…',
@@ -948,6 +950,7 @@ window.__ModuleLoader__.load({
         if (state.canOpen !== false) {
           items.push(separator('separator-apps'));
           if (isWorkspace) {
+            items.push(makeItem('open', t('menu.openWorkspaceFolder')));
             items.push(makeItem('reveal', t('menu.reveal')));
           } else {
             items.push(makeItem('open', isFile ? t('menu.openDefault') : t('menu.openFolder')));
