@@ -63,6 +63,7 @@ window.__ModuleLoader__.load({
     const zh = {
       'menu.quoteFile': '引用该文件',
       'menu.quoteLink': '引用链接',
+      'menu.copyName': '复制名称',
       'menu.copyPath': '复制路径',
       'menu.copyLink': '复制链接',
       'menu.openInternal': '打开（内部）',
@@ -94,6 +95,7 @@ window.__ModuleLoader__.load({
     const en = {
       'menu.quoteFile': 'Reference this file',
       'menu.quoteLink': 'Reference this link',
+      'menu.copyName': 'Copy name',
       'menu.copyPath': 'Copy path',
       'menu.copyLink': 'Copy link',
       'menu.openInternal': 'Open inside DSH',
@@ -145,6 +147,29 @@ window.__ModuleLoader__.load({
     function fileName(path) {
       const parts = String(path).split(/[\\/]/).filter(Boolean);
       return parts.length === 0 ? 'file' : parts[parts.length - 1];
+    }
+
+    function linkName(element, href) {
+      const text = (element && typeof element.textContent === 'string' ? element.textContent : '').trim().replace(/\s+/g, ' ');
+      if (text.length > 0) return text.slice(0, 200);
+      try {
+        return new URL(href).host;
+      } catch {
+        return href;
+      }
+    }
+
+    function displayName(file) {
+      if (file && typeof file.label === 'string' && file.label.length > 0) return file.label;
+      if (file && file.mode === 'url') {
+        try {
+          return new URL(file.url).host;
+        } catch {
+          return file.url;
+        }
+      }
+      if (file && typeof file.path === 'string' && file.path.length > 0) return fileName(file.path);
+      return '';
     }
 
     function stripLineAnchor(value) {
@@ -285,6 +310,7 @@ window.__ModuleLoader__.load({
             element,
             mode: 'url',
             url: elementHref,
+            label: linkName(element, elementHref),
             sessionId: null,
             path: null,
             address: null,
@@ -376,6 +402,7 @@ window.__ModuleLoader__.load({
           mode: 'directory',
           sessionId: store.getSnapshot().currentSessionId,
           path,
+          label: fileName(path),
           address: null,
           absolutePath: isAbsolutePath(path) ? path : null,
         };
@@ -386,12 +413,14 @@ window.__ModuleLoader__.load({
       const workspaceId = key.slice('workspace:'.length);
       if (!workspaceId) return null;
       let path;
+      let label;
       try {
         const workspaces = ctx.get('workspaces');
         const items = workspaces && workspaces.list ? workspaces.list.getSnapshot().items : [];
         const workspace = items.find((item) => item && item.workspaceId === workspaceId);
         if (workspace && typeof workspace.path === 'string' && workspace.path.length > 0) {
           path = workspace.path;
+          label = typeof workspace.title === 'string' && workspace.title.length > 0 ? workspace.title : fileName(path);
         }
       } catch {
         path = undefined;
@@ -402,6 +431,7 @@ window.__ModuleLoader__.load({
         mode: 'directory',
         sessionId: store.getSnapshot().currentSessionId,
         path,
+        label,
         address: null,
         absolutePath: isAbsolutePath(path) ? path : null,
       };
@@ -887,6 +917,7 @@ window.__ModuleLoader__.load({
         }
       } else if (isUrl) {
         if (state.currentSessionId) items.push(makeItem('quote-url', t('menu.quoteLink')));
+        items.push(makeItem('copy-name', t('menu.copyName')));
         items.push(makeItem('copy-url', t('menu.copyLink')));
         items.push(makeItem('open-url-internal', t('menu.openInternal')));
         items.push(separator('separator-url'));
@@ -898,16 +929,15 @@ window.__ModuleLoader__.load({
         const isDirectory = kind === 'directory';
         const isPendingEntry = file.mode === 'entry' && state.entryKind === null;
         const isFile = !isDirectory && !isPendingEntry && kind !== 'unknown';
+        if (isFile && (file.sessionId || state.currentSessionId)) items.push(makeItem('quote', t('menu.quoteFile')));
+        items.push(makeItem('copy-name', t('menu.copyName')));
         items.push(makeItem('copy-path', t('menu.copyPath')));
         if (isPendingEntry) {
           items.push(h('div', { key: 'entry-loading', style: loadingStyle }, t('menu.loading')));
         } else if (kind === 'unknown') {
           items.push(h('div', { key: 'entry-error', role: 'alert', style: errorStyle }, t('error.resolve')));
         }
-        if (isFile) {
-          if (file.sessionId || state.currentSessionId) items.push(makeItem('quote', t('menu.quoteFile')));
-          items.push(makeItem('preview', t('menu.openInternal')));
-        }
+        if (isFile) items.push(makeItem('preview', t('menu.openInternal')));
         if (state.canOpen !== false) {
           items.push(separator('separator-apps'));
           items.push(makeItem('open', isFile ? t('menu.openDefault') : t('menu.openFolder')));
@@ -1059,6 +1089,8 @@ window.__ModuleLoader__.load({
               quoteUrl(file.url, ctx, store);
             } else if (action === 'browser-open') {
               await openUrl(file.url, payload);
+            } else if (action === 'copy-name') {
+              await navigator.clipboard.writeText(displayName(file));
             } else if (action === 'copy-url') {
               await navigator.clipboard.writeText(file.url);
             } else if (action === 'copy-path') {
