@@ -364,15 +364,41 @@ window.__ModuleLoader__.load({
       return null;
     }
 
-    function findSidebarCandidate(target, store) {
+    function findSidebarCandidate(target, ctx, store) {
       if (!(target instanceof Element)) return null;
       const entry = target.closest('[data-files-entry]');
-      if (!entry) return null;
-      if (entry.getAttribute('data-files-entry') !== 'directory') return null;
-      const path = entry.getAttribute('data-files-path');
-      if (typeof path !== 'string' || path.length === 0) return null;
+      if (entry) {
+        if (entry.getAttribute('data-files-entry') !== 'directory') return null;
+        const path = entry.getAttribute('data-files-path');
+        if (typeof path !== 'string' || path.length === 0) return null;
+        return {
+          element: entry,
+          mode: 'directory',
+          sessionId: store.getSnapshot().currentSessionId,
+          path,
+          address: null,
+          absolutePath: isAbsolutePath(path) ? path : null,
+        };
+      }
+      const row = target.closest('[data-row-key^="workspace:"]');
+      if (!row) return null;
+      const key = row.getAttribute('data-row-key') || '';
+      const workspaceId = key.slice('workspace:'.length);
+      if (!workspaceId) return null;
+      let path;
+      try {
+        const workspaces = ctx.get('workspaces');
+        const items = workspaces && workspaces.list ? workspaces.list.getSnapshot().items : [];
+        const workspace = items.find((item) => item && item.workspaceId === workspaceId);
+        if (workspace && typeof workspace.path === 'string' && workspace.path.length > 0) {
+          path = workspace.path;
+        }
+      } catch {
+        path = undefined;
+      }
+      if (path === undefined) return null;
       return {
-        element: entry,
+        element: row,
         mode: 'directory',
         sessionId: store.getSnapshot().currentSessionId,
         path,
@@ -957,7 +983,7 @@ window.__ModuleLoader__.load({
             const flow = target instanceof Element ? target.closest('[data-chat-flow]') : null;
             const file = flow
               ? findCandidate(target, flow, store) || findTextCandidate(target, flow, store)
-              : findSidebarCandidate(target, store);
+              : findSidebarCandidate(target, ctx, store);
             if (!file) {
               if (flow) report('miss', describeTarget(target));
               return;
