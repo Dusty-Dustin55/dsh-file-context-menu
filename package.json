@@ -1,8 +1,8 @@
 {
   "name": "dsh-file-context-menu",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
-  "description": "Right-click file references in the DSH chat: preview, open with the default app, reveal in the file manager, reference the file in the composer, or save a copy.",
+  "description": "Right-click file references and web links in the DSH chat: reference, copy, preview, open with default or chosen app, reveal, or save a copy.",
   "license": "MIT",
   "icon": "./icon.svg",
   "exports": {
@@ -18,7 +18,8 @@
     "icon.svg",
     "locale/*.json",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "dsh": {
     "bundle": {
