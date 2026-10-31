@@ -177,6 +177,19 @@ function normalizeUrl(raw) {
 }
 
 function openWithDialog(target) {
+  if (process.platform === 'darwin') {
+    const script = [
+      'on run argv',
+      '  set targetPath to item 1 of argv',
+      '  try',
+      '    set chosen to choose application with prompt "选择用于打开的应用"',
+      '    do shell script "open -a " & quoted form of (POSIX path of chosen) & " " & quoted form of targetPath',
+      '  end try',
+      'end run',
+    ].join('\n');
+    spawn('osascript', ['-e', script, target], { detached: true, stdio: 'ignore' }).unref();
+    return;
+  }
   const child = spawn('rundll32.exe', ['shell32.dll,OpenAs_RunDLL', target], {
     detached: true,
     stdio: 'ignore',
@@ -288,7 +301,7 @@ export function apply(ctx) {
             sendJson(response, 404, { ok: false, error: 'not-found' });
             return;
           }
-          if (process.platform !== 'win32') {
+          if (process.platform !== 'win32' && process.platform !== 'darwin') {
             sendJson(response, 501, { ok: false, error: 'unsupported' });
             return;
           }

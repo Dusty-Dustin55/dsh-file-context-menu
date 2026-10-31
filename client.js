@@ -657,9 +657,11 @@ window.__ModuleLoader__.load({
       if (!result || result.ok !== true) throw new Error('open');
     }
 
-    function isWindowsPlatform() {
+    function hasSystemChooser() {
       try {
-        return /^Win/i.test(navigator.platform || '') || /Windows/u.test(navigator.userAgent || '');
+        const platform = navigator.platform || '';
+        const agent = navigator.userAgent || '';
+        return /^Win/i.test(platform) || /Windows/u.test(agent) || /^Mac/i.test(platform) || /Mac OS X/u.test(agent);
       } catch {
         return false;
       }
@@ -970,7 +972,7 @@ window.__ModuleLoader__.load({
             return;
           }
           if (action === 'apps-choose') {
-            if (isWindowsPlatform()) {
+            if (hasSystemChooser()) {
               store.patch({ busy: action, error: null });
               try {
                 await openWithSystem(file, ctx);

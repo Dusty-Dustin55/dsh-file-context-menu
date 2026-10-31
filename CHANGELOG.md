@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- macOS 的「选择应用打开…」改用 `osascript` 的 `choose application` 系统应用选择器，
+  选中后用 `open -a` 打开；取消或失败时自动回退应用列表。
+
 ## 0.3.1
 
 - 「选择应用打开…」在 Windows 上改用系统自带「打开方式」对话框，
