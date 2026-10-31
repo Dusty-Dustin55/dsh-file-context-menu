@@ -70,7 +70,7 @@ window.__ModuleLoader__.load({
       'menu.openDefault': '打开（默认应用）',
       'menu.openFolder': '打开文件夹',
       'menu.chooseApp': '选择应用打开…',
-      'menu.reveal': '在所在位置显示',
+      'menu.reveal': '打开所在文件夹',
       'menu.saveAs': '另存为…',
       'menu.openLink': '打开（默认浏览器）',
       'menu.chooseBrowser': '选择浏览器打开…',
@@ -102,7 +102,7 @@ window.__ModuleLoader__.load({
       'menu.openDefault': 'Open with default app',
       'menu.openFolder': 'Open folder',
       'menu.chooseApp': 'Open with…',
-      'menu.reveal': 'Show in folder',
+      'menu.reveal': 'Open containing folder',
       'menu.saveAs': 'Save as…',
       'menu.openLink': 'Open in default browser',
       'menu.chooseBrowser': 'Open in browser…',
@@ -428,7 +428,7 @@ window.__ModuleLoader__.load({
       if (path === undefined) return null;
       return {
         element: row,
-        mode: 'directory',
+        mode: 'workspace',
         sessionId: store.getSnapshot().currentSessionId,
         path,
         label,
@@ -925,10 +925,17 @@ window.__ModuleLoader__.load({
         items.push(makeItem('url-choose', t('menu.chooseBrowser')));
       } else {
         const kind =
-          file.mode === 'directory' ? 'directory' : file.mode === 'entry' ? state.entryKind : 'file';
+          file.mode === 'workspace'
+            ? 'workspace'
+            : file.mode === 'directory'
+              ? 'directory'
+              : file.mode === 'entry'
+                ? state.entryKind
+                : 'file';
+        const isWorkspace = kind === 'workspace';
         const isDirectory = kind === 'directory';
         const isPendingEntry = file.mode === 'entry' && state.entryKind === null;
-        const isFile = !isDirectory && !isPendingEntry && kind !== 'unknown';
+        const isFile = !isDirectory && !isWorkspace && !isPendingEntry && kind !== 'unknown';
         if (isFile && (file.sessionId || state.currentSessionId)) items.push(makeItem('quote', t('menu.quoteFile')));
         items.push(makeItem('copy-name', t('menu.copyName')));
         items.push(makeItem('copy-path', t('menu.copyPath')));
@@ -940,10 +947,14 @@ window.__ModuleLoader__.load({
         if (isFile) items.push(makeItem('preview', t('menu.openInternal')));
         if (state.canOpen !== false) {
           items.push(separator('separator-apps'));
-          items.push(makeItem('open', isFile ? t('menu.openDefault') : t('menu.openFolder')));
-          if (isFile) {
-            items.push(makeItem('apps-choose', t('menu.chooseApp')));
+          if (isWorkspace) {
             items.push(makeItem('reveal', t('menu.reveal')));
+          } else {
+            items.push(makeItem('open', isFile ? t('menu.openDefault') : t('menu.openFolder')));
+            if (isFile) {
+              items.push(makeItem('apps-choose', t('menu.chooseApp')));
+              items.push(makeItem('reveal', t('menu.reveal')));
+            }
           }
         }
         if (isFile) {
@@ -963,7 +974,7 @@ window.__ModuleLoader__.load({
         }
       } else {
         headerTitle = file.absolutePath || file.path;
-        headerText = fileName(file.path);
+        headerText = displayName(file);
       }
 
       return h(
