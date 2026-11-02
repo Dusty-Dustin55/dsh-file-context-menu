@@ -1,6 +1,6 @@
 {
   "name": "dsh-file-context-menu",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "type": "module",
   "description": "Right-click file references and web links in the DSH chat: reference, copy, preview, open with default or chosen app, reveal, or save a copy.",
   "license": "MIT",

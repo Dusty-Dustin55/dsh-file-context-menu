@@ -66,10 +66,11 @@ window.__ModuleLoader__.load({
       'menu.copyName': '复制名称',
       'menu.copyPath': '复制路径',
       'menu.copyLink': '复制链接',
+      'menu.copyText': '复制文字',
+      'menu.quoteText': '引用到对话框',
       'menu.openInternal': '打开（内部）',
       'menu.openDefault': '打开（默认应用）',
       'menu.openFolder': '打开文件夹',
-      'menu.openWorkspaceFolder': '打开工作区文件夹',
       'menu.chooseApp': '选择应用打开…',
       'menu.reveal': '打开所在文件夹',
       'menu.saveAs': '另存为…',
@@ -99,10 +100,11 @@ window.__ModuleLoader__.load({
       'menu.copyName': 'Copy name',
       'menu.copyPath': 'Copy path',
       'menu.copyLink': 'Copy link',
+      'menu.copyText': 'Copy text',
+      'menu.quoteText': 'Quote in composer',
       'menu.openInternal': 'Open inside DSH',
       'menu.openDefault': 'Open with default app',
       'menu.openFolder': 'Open folder',
-      'menu.openWorkspaceFolder': 'Open workspace folder',
       'menu.chooseApp': 'Open with…',
       'menu.reveal': 'Open containing folder',
       'menu.saveAs': 'Save as…',
@@ -440,6 +442,68 @@ window.__ModuleLoader__.load({
       };
     }
 
+    function snippetOf(text) {
+      const oneLine = String(text).replace(/\s+/gu, ' ').trim();
+      return oneLine.length > 48 ? `${oneLine.slice(0, 48)}…` : oneLine;
+    }
+
+    function selectionTextIn(flow, target) {
+      try {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+        if (typeof selection.containsNode === 'function' && !selection.containsNode(target, true)) return null;
+        const node = selection.anchorNode;
+        const anchor = node && (node.nodeType === 1 ? node : node.parentElement);
+        if (!anchor || !flow.contains(anchor)) return null;
+        const text = selection.toString().trim();
+        if (!text) return null;
+        return text.length > 8000 ? text.slice(0, 8000) : text;
+      } catch {
+        return null;
+      }
+    }
+
+    function findSelectionCandidate(target, flow, store) {
+      if (!(target instanceof Element)) return null;
+      const text = selectionTextIn(flow, target);
+      if (!text) return null;
+      return {
+        element: target,
+        mode: 'selection',
+        text,
+        label: snippetOf(text),
+        sessionId: store.getSnapshot().currentSessionId,
+        path: null,
+        address: null,
+        absolutePath: null,
+      };
+    }
+
+    function findParagraphTextCandidate(target, flow, store) {
+      if (!(target instanceof Element)) return null;
+      if (target.closest('button, a, input, textarea, select, [role="button"], [contenteditable="true"]')) return null;
+      const block = target.closest('p, li, blockquote, pre, h1, h2, h3, h4, h5, h6, td, th');
+      const element = block && flow.contains(block) ? block : target;
+      let text = (element.textContent || '').trim();
+      if (!text) {
+        const parent = element.parentElement;
+        if (!parent || !flow.contains(parent)) return null;
+        text = (parent.textContent || '').trim();
+      }
+      if (!text) return null;
+      if (text.length > 8000) text = text.slice(0, 8000);
+      return {
+        element,
+        mode: 'selection',
+        text,
+        label: snippetOf(text),
+        sessionId: store.getSnapshot().currentSessionId,
+        path: null,
+        address: null,
+        absolutePath: null,
+      };
+    }
+
     function findSidebarCandidate(target, ctx, store) {
       if (!(target instanceof Element)) return null;
       const entry = target.closest('[data-files-entry]');
@@ -740,6 +804,24 @@ window.__ModuleLoader__.load({
       ctx.sidebarRight.openTab('browser', { params: { url } });
     }
 
+    function quoteText(text, ctx, store) {
+      const sessionId = store.getSnapshot().currentSessionId;
+      if (!sessionId) throw new Error('quote');
+      const conversation = ctx.get('conversation');
+      const shell =
+        conversation && conversation.input && typeof conversation.input.shell === 'function'
+          ? conversation.input.shell(sessionId)
+          : undefined;
+      if (!shell || typeof shell.requestDraftInitialization !== 'function') throw new Error('quote');
+      const quoted =
+        String(text)
+          .split(/\r?\n/u)
+          .map((line) => `> ${line}`)
+          .join('\n') + '\n\n';
+      const result = shell.requestDraftInitialization({ prompt: quoted, whenDraftExists: 'append' });
+      if (result === 'blocked' || result === 'preserved') throw new Error('quote');
+    }
+
     function apiPath(relative) {
       const value = String(relative).replace(/^\/+/, '');
       if (typeof document === 'undefined') return '/' + value;
@@ -965,6 +1047,9 @@ window.__ModuleLoader__.load({
             items.push(makeItem(state.view === 'browsers' ? 'browser-open' : 'app-open', label, option.id));
           }
         }
+      } else if (file.mode === 'selection') {
+        items.push(makeItem('copy-text', t('menu.copyText')));
+        if (state.currentSessionId) items.push(makeItem('quote-text', t('menu.quoteText')));
       } else if (isUrl) {
         if (state.currentSessionId) items.push(makeItem('quote-url', t('menu.quoteLink')));
         items.push(makeItem('copy-name', t('menu.copyName')));
@@ -1000,7 +1085,6 @@ window.__ModuleLoader__.load({
         if (state.canOpen !== false) {
           items.push(separator('separator-apps'));
           if (isWorkspace) {
-            items.push(makeItem('open', t('menu.openWorkspaceFolder')));
             items.push(makeItem('reveal', t('menu.reveal')));
           } else {
             items.push(makeItem('open', isFile ? t('menu.openDefault') : t('menu.openFolder')));
@@ -1025,6 +1109,9 @@ window.__ModuleLoader__.load({
         } catch {
           headerText = file.url;
         }
+      } else if (file.mode === 'selection') {
+        headerTitle = file.text;
+        headerText = file.label;
       } else {
         headerTitle = file.absolutePath || file.path;
         headerText = displayName(file);
@@ -1075,12 +1162,16 @@ window.__ModuleLoader__.load({
           const onContextMenu = (event) => {
             const target = event.target;
             const flow = target instanceof Element ? target.closest('[data-chat-flow]') : null;
-            const file = flow
-              ? findCandidate(target, flow, store) ||
-                findTextCandidate(target, flow, store) ||
-                findPlainUrlCandidate(target, flow) ||
-                findAttachmentCandidate(target, flow, store)
-              : findSidebarCandidate(target, ctx, store);
+            const selection = flow ? findSelectionCandidate(target, flow, store) : null;
+            const file =
+              selection ||
+              (flow
+                ? findCandidate(target, flow, store) ||
+                  findTextCandidate(target, flow, store) ||
+                  findPlainUrlCandidate(target, flow) ||
+                  findAttachmentCandidate(target, flow, store) ||
+                  findParagraphTextCandidate(target, flow, store)
+                : findSidebarCandidate(target, ctx, store));
             if (!file) {
               if (flow) report('miss', describeTarget(target));
               return;
@@ -1158,6 +1249,10 @@ window.__ModuleLoader__.load({
               await openUrl(file.url, payload);
             } else if (action === 'copy-name') {
               await navigator.clipboard.writeText(displayName(file));
+            } else if (action === 'copy-text') {
+              await navigator.clipboard.writeText(file.text);
+            } else if (action === 'quote-text') {
+              quoteText(file.text, ctx, store);
             } else if (action === 'copy-url') {
               await navigator.clipboard.writeText(file.url);
             } else if (action === 'copy-path') {
